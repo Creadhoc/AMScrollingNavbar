@@ -11,6 +11,8 @@
 
 #define IOS7_OR_LATER ([[[UIDevice currentDevice] systemVersion] floatValue] >= 7.0)
 
+
+
 @implementation UIViewController (ScrollingNavbar)
 
 - (void)setPanGesture:(UIPanGestureRecognizer*)panGesture {	objc_setAssociatedObject(self, @selector(panGesture), panGesture, OBJC_ASSOCIATION_RETAIN); }
@@ -41,6 +43,67 @@
 - (BOOL)shouldScrollWhenContentFits {	return [objc_getAssociatedObject(self, @selector(shouldScrollWhenContentFits)) boolValue]; }
 
 
+
+- (void)setShyTitleLabel:(UILabel *)title {
+
+	objc_setAssociatedObject(self, @selector(shyTitleLabel), title, OBJC_ASSOCIATION_RETAIN);
+}
+
+- (UILabel *)shyTitleLabel {
+
+	return objc_getAssociatedObject(self, @selector(shyTitleLabel));
+}
+
+- (void)setShyLeftBarButton:(UIButton *)button {
+
+	objc_setAssociatedObject(self, @selector(shyLeftBarButton), button, OBJC_ASSOCIATION_RETAIN);
+}
+
+- (UIButton *)shyLeftBarButton {
+
+	return objc_getAssociatedObject(self, @selector(shyLeftBarButton));
+}
+
+- (void)setLeftBarButtonAction:(LeftBarButtonAction)block {
+
+	objc_setAssociatedObject(self, @selector(leftBarButtonItem), block, OBJC_ASSOCIATION_COPY_NONATOMIC);
+}
+
+- (LeftBarButtonAction)leftBarButtonAction {
+
+	return objc_getAssociatedObject(self, @selector(leftBarButtonItem));
+}
+
+- (void)setHideNavigationBarSubviewsOnLeftBarButtonAction:(BOOL)hide {
+
+	objc_setAssociatedObject(self, @selector(hideNavigationBarSubviewsOnLeftBarButtonAction), [NSNumber numberWithBool:hide], OBJC_ASSOCIATION_RETAIN);
+}
+
+- (BOOL)hideNavigationBarSubviewsOnLeftBarButtonAction {
+
+	return [objc_getAssociatedObject(self, @selector(hideNavigationBarSubviewsOnLeftBarButtonAction)) boolValue];
+}
+
+
+
+- (void)setupShyNavigationBarTitle:(NSString *)title leftBarButtonImage:(UIImage *)image
+		hideNavigationBarSubviewsOnLeftBarButtonAction:(BOOL)hide
+		leftBarButtonAction:(void (^)())action {
+
+	self.leftBarButtonAction= action;
+	self.hideNavigationBarSubviewsOnLeftBarButtonAction = hide;
+
+	self.shyLeftBarButton 	= [[UIButton alloc] init];
+	self.shyTitleLabel		= [[UILabel alloc] init];
+	self.shyTitleLabel.text = title;
+	self.shyTitleLabel.font	= [UIFont fontWithName:@"HelveticaNeue-Bold"  size:18.0];
+	[self.shyTitleLabel sizeToFit];
+
+
+	[self.shyLeftBarButton setBackgroundImage:image forState:UIControlStateNormal];
+	[self.shyLeftBarButton addTarget:self action:@selector(callLeftBarButtonAction) forControlEvents:UIControlEventTouchUpInside];
+}
+
 - (void)followScrollView:(UIView*)scrollableView
 {
 	[self followScrollView:scrollableView withDelay:0];
@@ -48,6 +111,38 @@
 
 - (void)followScrollView:(UIView*)scrollableView withDelay:(float)delay
 {
+
+	NSAssert(self.shyLeftBarButton != nil, @"ShyNavBar's properties not initialised");
+	NSAssert(self.shyTitleLabel != nil, @"ShyNavBar's properties not initialised");
+	NSAssert(self.leftBarButtonAction != nil, @"ShyNavBar's properties not initialised");
+
+
+	[self.shyLeftBarButton setFrame:CGRectMake(12, 11, self.shyLeftBarButton.currentBackgroundImage.size.width, self.shyLeftBarButton.currentBackgroundImage.size.height)];
+	[self.shyTitleLabel setCenter:CGPointMake(self.navigationController.navigationBar.bounds.size.width / 2, self.navigationController.navigationBar.bounds.size.height / 2)];
+	[self.shyLeftBarButton setCenter:CGPointMake(self.shyLeftBarButton.center.x, self.navigationController.navigationBar.bounds.size.height / 2)];
+
+	if (!self.tabBarController) {
+
+		[self.navigationController.navigationBar addSubview:self.shyLeftBarButton];
+		[self.navigationController.navigationBar addSubview:self.shyTitleLabel];
+
+		self.navigationItem.title 				= nil;
+		self.navigationItem.leftBarButtonItem	= nil;
+		self.navigationItem.hidesBackButton		= YES;
+	}
+	else {
+
+		[self.tabBarController.navigationController.navigationBar addSubview:self.shyLeftBarButton];
+		[self.tabBarController.navigationController.navigationBar addSubview:self.shyTitleLabel];
+
+		self.tabBarController.navigationItem.title 				= nil;
+		self.tabBarController.navigationItem.leftBarButtonItem 	= nil;
+		self.tabBarController.navigationItem.hidesBackButton	= YES;
+	}
+
+
+
+
 	self.scrollableView = scrollableView;
 	
 	self.panGesture = [[UIPanGestureRecognizer alloc] initWithTarget:self action:@selector(handlePan:)];
@@ -172,7 +267,7 @@
 				[self scrollWithDelta:-self.navbarHeight];
 			}];
 		} else {
-			[self updateNavbarAlpha:self.navbarHeight];
+			[self update:self.navbarHeight];
 		}
 	}
 }
@@ -369,7 +464,7 @@
 
 - (void)updateSizingWithDelta:(CGFloat)delta
 {
-    [self updateNavbarAlpha:delta];
+    [self update:delta];
     
     // At this point the navigation bar is already been placed in the right position, it'll be the reference point for the other views'sizing
     CGRect frameNav = self.navigationController.navigationBar.frame;
@@ -391,7 +486,7 @@
     [self.view setNeedsLayout];
 }
 
-- (void)updateNavbarAlpha:(CGFloat)delta
+- (void)update:(CGFloat)delta
 {
 	CGRect frame = self.navigationController.navigationBar.frame;
 	
@@ -400,18 +495,37 @@
 	}
     
 	// Change the alpha channel of every item on the navbr. The overlay will appear, while the other objects will disappear, and vice versa
-	float alpha = (frame.origin.y + self.deltaLimit) / frame.size.height;
-	[self.overlay setAlpha:1 - alpha];
-	[self.navigationItem.leftBarButtonItems enumerateObjectsUsingBlock:^(UIBarButtonItem* obj, NSUInteger idx, BOOL *stop) {
-		obj.customView.alpha = alpha;
-	}];
-    self.navigationItem.leftBarButtonItem.customView.alpha = alpha;
-	[self.navigationItem.rightBarButtonItems enumerateObjectsUsingBlock:^(UIBarButtonItem* obj, NSUInteger idx, BOOL *stop) {
-		obj.customView.alpha = alpha;
-	}];
-    self.navigationItem.rightBarButtonItem.customView.alpha = alpha;
-	self.navigationItem.titleView.alpha = alpha;
-	self.navigationController.navigationBar.tintColor = [self.navigationController.navigationBar.tintColor colorWithAlphaComponent:alpha];
+	float overlayAlpha, scaleAlpha;
+
+	overlayAlpha 	= (frame.origin.y + self.deltaLimit) / frame.size.height;
+	scaleAlpha		= overlayAlpha;
+
+	overlayAlpha	= (float) (overlayAlpha > 0.8 ? 1 : overlayAlpha * 0.8);
+
+
+
+	self.overlay.alpha 				= (CGFloat) (1 - overlayAlpha);
+
+	self.shyLeftBarButton.transform = CGAffineTransformMakeScale(scaleAlpha, scaleAlpha);
+	self.shyTitleLabel.transform 	= CGAffineTransformMakeScale(scaleAlpha, scaleAlpha);
+
+	self.shyTitleLabel.center		= CGPointMake(self.shyTitleLabel.center.x, (self.navbarHeight - frame.origin.y) / 2);
+	self.shyLeftBarButton.center	= CGPointMake(self.shyLeftBarButton.center.x, (self.navbarHeight - frame.origin.y) / 2);
 }
+
+- (void)callLeftBarButtonAction {
+
+	if (self.leftBarButtonAction) {
+
+		if (self.hideNavigationBarSubviewsOnLeftBarButtonAction) {
+
+			[self.shyLeftBarButton removeFromSuperview];
+			[self.shyTitleLabel removeFromSuperview];
+		}
+
+		self.leftBarButtonAction();
+	}
+}
+
 
 @end

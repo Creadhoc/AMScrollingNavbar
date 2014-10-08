@@ -9,7 +9,20 @@
 @import Foundation;
 @import UIKit;
 
+typedef void (^LeftBarButtonAction)();
+
+
+
 @interface UIViewController (ScrollingNavbar) <UIGestureRecognizerDelegate>
+
+/*
+	PerfectMe
+ */
+
+- (void)setupShyNavigationBarTitle:(NSString *)title leftBarButtonImage:(UIImage *)image
+						 hideNavigationBarSubviewsOnLeftBarButtonAction:(BOOL)hide
+													leftBarButtonAction:(void (^)())action;
+
 
 /**-----------------------------------------------------------------------------
  * @name UIViewController+ScrollingNavbar
